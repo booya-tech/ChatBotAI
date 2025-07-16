@@ -1,0 +1,19 @@
+{
+	"name": "xcode build server",
+	"version": "0.2",
+	"bspVersion": "2.0",
+	"languages": [
+		"c",
+		"cpp",
+		"objective-c",
+		"objective-cpp",
+		"swift"
+	],
+	"argv": [
+		"/opt/homebrew/bin/xcode-build-server"
+	],
+	"workspace": "/Users/boopannachai/Repositories/Repositories/LearnCodeDeepDive/personal-projects/ChatBotAI/ChatBotAI.xcodeproj/project.xcworkspace",
+	"build_root": "/Users/boopannachai/Library/Developer/Xcode/DerivedData/ChatBotAI-awrpwnpxvqkelkcszcpeupsautjr",
+	"scheme": "ChatBotAI",
+	"kind": "xcode"
+}
