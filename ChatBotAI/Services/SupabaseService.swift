@@ -48,7 +48,15 @@ class SupabaseService: ObservableObject {
     }
     
     func signInAnonymously() async throws {
+        print("🔐 Attempting anonymous sign in...")
         try await client.auth.signInAnonymously()
+        
+        if let user = currentUser {
+            print("✅ Anonymous sign in successful! User ID: \(user.id.uuidString)")
+        } else {
+            print("❌ Anonymous sign in failed - no user returned")
+            throw SupabaseError.notAuthenticated
+        }
     }
     
     func signOut() async throws {
@@ -58,9 +66,13 @@ class SupabaseService: ObservableObject {
     // MARK: - Conversations
     
     func createConversation(title: String) async throws -> ChatConversation {
-        guard let userId = currentUser?.id.uuidString else {
+        // Ensure user is authenticated
+        guard let user = currentUser else {
             throw SupabaseError.notAuthenticated
         }
+        
+        let userId = user.id.uuidString
+        print("🔍 Creating conversation for user: \(userId)")
         
         isLoading = true
         error = nil
@@ -76,9 +88,11 @@ class SupabaseService: ObservableObject {
                 .execute()
                 .value
             
+            print("✅ Successfully created conversation: \(response.id)")
             isLoading = false
             return response
         } catch {
+            print("❌ Failed to create conversation: \(error)")
             isLoading = false
             self.error = SupabaseError.databaseError(error.localizedDescription)
             throw error
@@ -213,6 +227,49 @@ class SupabaseService: ObservableObject {
         // TODO: Implement realtime subscription once core functionality is working
         // For now, we'll rely on manual refresh/polling
         print("Realtime subscription not yet implemented")
+    }
+    
+    // MARK: - Debug Methods
+    
+    func testDatabaseConnection() async throws {
+        guard let user = currentUser else {
+            throw SupabaseError.notAuthenticated
+        }
+        
+        print("🧪 Testing database connection...")
+        print("🧪 User ID: \(user.id.uuidString)")
+        
+        // Test if we can query conversations table
+        do {
+            let _: [ChatConversation] = try await client
+                .from("conversations")
+                .select()
+                .execute()
+                .value
+            print("✅ Can query conversations table")
+        } catch {
+            print("❌ Cannot query conversations table: \(error)")
+        }
+        
+        // Test if we can insert a simple conversation
+        do {
+            let testRequest = CreateConversationRequest(
+                userId: user.id.uuidString,
+                title: "Test Conversation"
+            )
+            
+            let _: ChatConversation = try await client
+                .from("conversations")
+                .insert(testRequest)
+                .select()
+                .single()
+                .execute()
+                .value
+            
+            print("✅ Can insert conversation")
+        } catch {
+            print("❌ Cannot insert conversation: \(error)")
+        }
     }
     
     // MARK: - Helper Methods

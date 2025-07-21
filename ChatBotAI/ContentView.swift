@@ -9,7 +9,7 @@ import SwiftUI
 
 // MARK: - Service Type Alias
 // Change this to SupabaseService once package is linked properly
-typealias ChatService = MockSupabaseService
+typealias ChatService = SupabaseService
 
 // MARK: - Chat View
 struct ContentView: View {
@@ -91,22 +91,35 @@ struct ContentView: View {
     
     private func initializeChat() async {
         do {
+            print("🚀 Starting chat initialization...")
+            
             // Sign in anonymously if not already signed in
             if !supabaseService.isSignedIn {
+                print("👤 User not signed in, attempting anonymous sign in...")
                 try await supabaseService.signInAnonymously()
+            } else {
+                print("👤 User already signed in")
             }
             
+            // Add a small delay to ensure authentication is complete
+            try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+            
+            print("📂 Fetching user conversations...")
             // Try to get existing conversations or create a new one
             let conversations = try await supabaseService.fetchUserConversations()
+            print("📂 Found \(conversations.count) conversations")
             
             if let existingConversation = conversations.first {
+                print("📖 Using existing conversation: \(existingConversation.id)")
                 currentConversation = existingConversation
                 await loadMessages(for: existingConversation.id)
             } else {
+                print("➕ Creating new conversation...")
                 // Create a new conversation
                 let newConversation = try await supabaseService.createConversation(title: "New Chat")
                 currentConversation = newConversation
                 
+                print("💬 Adding welcome message...")
                 // Add welcome message
                 _ = try await supabaseService.sendAIResponse(
                     conversationId: newConversation.id,
@@ -116,12 +129,17 @@ struct ContentView: View {
                 await loadMessages(for: newConversation.id)
             }
             
+            print("✅ Chat initialization complete!")
             isInitializing = false
             
         } catch {
-            print("Failed to initialize chat: \(error)")
+            print("🚨 Failed to initialize chat: \(error)")
+            print("🔍 Error details: \(error.localizedDescription)")
+            if let supabaseError = error as? any Error {
+                print("🔍 Raw error: \(supabaseError)")
+            }
             isInitializing = false
-            supabaseService.error = .databaseError("Failed to initialize chat")
+            supabaseService.error = .databaseError("Failed to initialize chat: \(error.localizedDescription)")
         }
     }
     
