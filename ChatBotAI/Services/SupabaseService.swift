@@ -273,7 +273,6 @@ class SupabaseService: ObservableObject {
     }
     
     // MARK: - Helper Methods
-    
     func generateAIResponse(to userMessage: String) -> String {
         let responses = [
             "That's an interesting question! Let me think about that.",

@@ -14,6 +14,7 @@ typealias ChatService = SupabaseService
 // MARK: - Chat View
 struct ContentView: View {
     @StateObject private var supabaseService = ChatService.shared
+    @StateObject private var aiService = AIService.shared
     @State private var messages: [Message] = []
     @State private var inputText: String = ""
     @State private var currentConversation: ChatConversation?
@@ -37,6 +38,11 @@ struct ContentView: View {
             }
             .navigationTitle("ChatBot AI")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    AIModelSelectorView(aiService: aiService)
+                }
+            }
             .task {
                 await initializeChat()
             }
@@ -56,7 +62,7 @@ struct ContentView: View {
                                 .id(message.id)
                         }
                         
-                        TypingIndicatorView(isTyping: isSending)
+                        TypingIndicatorView(isTyping: isSending || aiService.isGenerating)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
@@ -65,7 +71,12 @@ struct ContentView: View {
                     scrollToBottom(proxy: proxy)
                 }
                 .onChange(of: isSending) { _ in
-                    if isSending {
+                    if isSending || aiService.isGenerating {
+                        scrollToBottom(proxy: proxy, anchor: .bottom)
+                    }
+                }
+                .onChange(of: aiService.isGenerating) { _ in
+                    if aiService.isGenerating {
                         scrollToBottom(proxy: proxy, anchor: .bottom)
                     }
                 }
@@ -78,10 +89,17 @@ struct ContentView: View {
                 }
             }
             
+            // AI Error Banner
+            if let aiError = aiService.error {
+                ErrorBannerView(error: SupabaseError.databaseError(aiError.localizedDescription)) {
+                    aiService.error = nil
+                }
+            }
+            
             // Input Field
             ChatInputView(
                 inputText: $inputText,
-                isSending: isSending,
+                isSending: isSending || aiService.isGenerating,
                 onSend: sendMessage
             )
         }
@@ -120,10 +138,15 @@ struct ContentView: View {
                 currentConversation = newConversation
                 
                 print("💬 Adding welcome message...")
+                // Generate welcome message using AI
+                let welcomeMessage = try await aiService.generateResponse(
+                    for: "Please introduce yourself as a helpful AI assistant and ask how you can help."
+                )
+                
                 // Add welcome message
                 _ = try await supabaseService.sendAIResponse(
                     conversationId: newConversation.id,
-                    content: "Hello! I'm your AI assistant. How can I help you today?"
+                    content: welcomeMessage
                 )
                 
                 await loadMessages(for: newConversation.id)
@@ -174,11 +197,11 @@ struct ContentView: View {
                 let localUserMessage = Message(from: userMessage)
                 messages.append(localUserMessage)
                 
-                // Generate and send AI response
-                let aiResponseContent = supabaseService.generateAIResponse(to: messageContent)
-                
-                // Simulate typing delay
-                try await Task.sleep(nanoseconds: 1_500_000_000) // 1.5 seconds
+                // Generate AI response using selected model
+                let aiResponseContent = try await aiService.generateResponse(
+                    for: messageContent,
+                    conversationHistory: messages
+                )
                 
                 let aiMessage = try await supabaseService.sendAIResponse(
                     conversationId: conversation.id,
@@ -204,7 +227,7 @@ struct ContentView: View {
     
     private func scrollToBottom(proxy: ScrollViewProxy, anchor: UnitPoint = .bottom) {
         withAnimation(.easeOut(duration: 0.3)) {
-            if isSending {
+            if isSending || aiService.isGenerating {
                 proxy.scrollTo("loading", anchor: anchor)
             } else if let lastMessage = messages.last {
                 proxy.scrollTo(lastMessage.id, anchor: anchor)
