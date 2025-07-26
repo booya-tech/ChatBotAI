@@ -20,6 +20,8 @@ struct ContentView: View {
     @State private var currentConversation: ChatConversation?
     @State private var isInitializing = true
     @State private var isSending = false
+    @State private var showAPITestResult = false
+    @State private var apiTestMessage = ""
     
     var body: some View {
         NavigationView {
@@ -39,12 +41,28 @@ struct ContentView: View {
             .navigationTitle("ChatBot AI")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("Test APIs") {
+                        Task {
+                            await testAllAPIs()
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                }
+                
                 ToolbarItem(placement: .navigationBarTrailing) {
                     AIModelSelectorView(aiService: aiService)
+                        .zIndex(1001) // Ensure toolbar item is above other content
                 }
             }
             .task {
                 await initializeChat()
+            }
+            .alert("API Status Test", isPresented: $showAPITestResult) {
+                Button("OK") { showAPITestResult = false }
+            } message: {
+                Text(apiTestMessage)
             }
         }
     }
@@ -66,6 +84,10 @@ struct ContentView: View {
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
+                }
+                .onTapGesture {
+                    // Dismiss keyboard when tapping on the messages area
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
                 .onChange(of: messages.count) { _ in
                     scrollToBottom(proxy: proxy)
@@ -186,8 +208,8 @@ struct ContentView: View {
         isSending = true
         
         Task {
+            // Step 1: Send user message (this should always work)
             do {
-                // Send user message
                 let userMessage = try await supabaseService.sendMessage(
                     conversationId: conversation.id,
                     content: messageContent
@@ -197,7 +219,18 @@ struct ContentView: View {
                 let localUserMessage = Message(from: userMessage)
                 messages.append(localUserMessage)
                 
-                // Generate AI response using selected model
+                print("✅ User message sent successfully")
+                
+            } catch {
+                print("❌ Failed to send user message: \(error)")
+                supabaseService.error = .databaseError("Failed to send message")
+                isSending = false
+                inputText = messageContent // Restore input
+                return
+            }
+            
+            // Step 2: Generate AI response (can fail independently)
+            do {
                 let aiResponseContent = try await aiService.generateResponse(
                     for: messageContent,
                     conversationHistory: messages
@@ -212,16 +245,43 @@ struct ContentView: View {
                 let localAIMessage = Message(from: aiMessage)
                 messages.append(localAIMessage)
                 
-                isSending = false
+                print("✅ AI response generated successfully")
                 
             } catch {
-                print("Failed to send message: \(error)")
-                supabaseService.error = .databaseError("Failed to send message")
-                isSending = false
+                print("❌ Failed to generate AI response: \(error)")
                 
-                // Restore input text if sending failed
-                inputText = messageContent
+                // Auto-switch to Mock AI if Hugging Face fails with 404
+                if error.localizedDescription.contains("Model not found") {
+                    print("🔄 Auto-switching to Mock AI due to model unavailability")
+                    aiService.switchModel(to: .mockAI)
+                    
+                    // Generate mock response instead
+                    let mockProvider = MockAIProvider()
+                    let mockResponse = try await mockProvider.generateResponse(for: messageContent, conversationHistory: messages)
+                    
+                    do {
+                        let aiMessage = try await supabaseService.sendAIResponse(
+                            conversationId: conversation.id,
+                            content: mockResponse
+                        )
+                        
+                        let localAIMessage = Message(from: aiMessage)
+                        messages.append(localAIMessage)
+                        print("✅ Fallback response sent successfully")
+                    } catch {
+                        print("❌ Even fallback failed: \(error)")
+                    }
+                } else {
+                    // Show error for other types of failures
+                    if let aiError = error as? AIError {
+                        aiService.error = aiError
+                    } else {
+                        aiService.error = .generationFailed(error.localizedDescription)
+                    }
+                }
             }
+            
+            isSending = false
         }
     }
     
@@ -231,6 +291,43 @@ struct ContentView: View {
                 proxy.scrollTo("loading", anchor: anchor)
             } else if let lastMessage = messages.last {
                 proxy.scrollTo(lastMessage.id, anchor: anchor)
+            }
+        }
+    }
+    
+    // MARK: - API Testing
+    private func testAllAPIs() async {
+        print("🧪 Testing all API tokens...")
+        
+        var results: [String] = []
+        
+        // Test Hugging Face
+        let hfResult = await AIConfig.testHuggingFaceToken()
+        if hfResult.isValid {
+            results.append("✅ Hugging Face: Working")
+        } else {
+            results.append("❌ Hugging Face: \(hfResult.error ?? "Failed")")
+        }
+        
+        // Test Groq
+        let groqResult = await AIConfig.testGroqToken()
+        if groqResult.isValid {
+            results.append("✅ Groq: Working")
+        } else {
+            results.append("❌ Groq: \(groqResult.error ?? "Failed")")
+        }
+        
+        await MainActor.run {
+            apiTestMessage = results.joined(separator: "\n\n")
+            showAPITestResult = true
+            
+            // Auto-switch to working AI if current one fails
+            if !hfResult.isValid && groqResult.isValid {
+                print("🔄 Auto-switching to Groq since Hugging Face failed")
+                aiService.switchModel(to: .groqLlama)
+            } else if !groqResult.isValid && hfResult.isValid {
+                print("🔄 Auto-switching to Hugging Face since Groq failed")
+                aiService.switchModel(to: .huggingFaceDialo)
             }
         }
     }

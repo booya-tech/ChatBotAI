@@ -23,7 +23,7 @@ protocol AIProvider {
 // MARK: - AI Models Enum
 
 enum AIModel: String, CaseIterable, Identifiable {
-    case huggingFaceLlama = "meta-llama/Llama-2-7b-chat-hf"
+    case huggingFaceDialo = "microsoft/DialoGPT-small"
     case geminiFlash = "gemini-1.5-flash"
     case groqLlama = "llama-3.1-8b-instant"
     case groqMixtral = "mixtral-8x7b-32768"
@@ -33,7 +33,7 @@ enum AIModel: String, CaseIterable, Identifiable {
     
     var displayName: String {
         switch self {
-        case .huggingFaceLlama: return "Llama 2 7B (Hugging Face)"
+        case .huggingFaceDialo: return "DialoGPT Small (Hugging Face)"
         case .geminiFlash: return "Gemini 1.5 Flash (Google)"
         case .groqLlama: return "Llama 3.1 8B (Groq)"
         case .groqMixtral: return "Mixtral 8x7B (Groq)"
@@ -43,7 +43,7 @@ enum AIModel: String, CaseIterable, Identifiable {
     
     var provider: AIProviderType {
         switch self {
-        case .huggingFaceLlama: return .huggingFace
+        case .huggingFaceDialo: return .huggingFace
         case .geminiFlash: return .google
         case .groqLlama, .groqMixtral: return .groq
         case .mockAI: return .mock
@@ -52,7 +52,7 @@ enum AIModel: String, CaseIterable, Identifiable {
     
     var isFree: Bool {
         switch self {
-        case .huggingFaceLlama, .geminiFlash, .groqLlama, .groqMixtral, .mockAI:
+        case .huggingFaceDialo, .geminiFlash, .groqLlama, .groqMixtral, .mockAI:
             return true
         }
     }
@@ -68,7 +68,7 @@ enum AIProviderType {
 class AIService: ObservableObject {
     static let shared = AIService()
     
-    @Published var selectedModel: AIModel = .huggingFaceLlama
+    @Published var selectedModel: AIModel = .groqLlama
     @Published var isGenerating = false
     @Published var error: AIError?
     
@@ -76,12 +76,33 @@ class AIService: ObservableObject {
     
     private init() {
         setupProviders()
+        selectBestAvailableModel()
     }
     
     private func setupProviders() {
         providers[.huggingFace] = HuggingFaceProvider()
         providers[.groq] = GroqProvider()
+        providers[.google] = MockAIProvider() // Placeholder until GoogleGeminiProvider is added
         providers[.mock] = MockAIProvider()
+    }
+    
+    private func selectBestAvailableModel() {
+        // Priority order: Groq (fastest/most reliable) > Hugging Face > Mock AI
+        let preferredModels: [AIModel] = [.groqLlama, .huggingFaceDialo, .mockAI]
+        
+        for model in preferredModels {
+            if let provider = providers[model.provider], provider.isAvailable {
+                selectedModel = model
+                print("🎯 Auto-selected \(model.displayName) as default AI model")
+                return
+            }
+        }
+        
+        // Fallback to any available model
+        if let firstAvailable = availableModels.first {
+            selectedModel = firstAvailable
+            print("🎯 Fallback selected \(firstAvailable.displayName) as default AI model")
+        }
     }
     
     // MARK: - Public Methods
@@ -116,13 +137,20 @@ class AIService: ObservableObject {
     }
     
     func switchModel(to model: AIModel) {
+        let oldModel = selectedModel
         selectedModel = model
-        print("🔄 Switched to AI model: \(model.displayName)")
+        print("🔄 Switched AI model from \(oldModel.displayName) to \(model.displayName)")
+        print("🔍 Available models: \(availableModels.map { $0.displayName })")
     }
     
     var availableModels: [AIModel] {
         AIModel.allCases.filter { model in
-            providers[model.provider]?.isAvailable ?? false
+            if let provider = providers[model.provider] {
+                return provider.isAvailable
+            } else {
+                // If no provider is set up, still allow Mock AI
+                return model == .mockAI
+            }
         }
     }
 }

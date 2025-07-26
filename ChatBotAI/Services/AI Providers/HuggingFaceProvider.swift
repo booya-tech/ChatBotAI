@@ -9,7 +9,7 @@ import Foundation
 
 class HuggingFaceProvider: AIProvider {
     let name = "Hugging Face"
-    let model = "meta-llama/Llama-2-7b-chat-hf"
+    let model = "microsoft/DialoGPT-small"
     
     private let apiKey: String?
     private let baseURL = "https://api-inference.huggingface.co/models"
@@ -32,20 +32,13 @@ class HuggingFaceProvider: AIProvider {
         
         let url = URL(string: "\(baseURL)/\(model)")!
         
-        // Build conversation context for Llama format
-        var conversation = ""
+        // Build conversation context for DialoGPT
+        var conversation = message
         
-        // Add conversation history (last 5 messages for context)
-        for historyMessage in conversationHistory.suffix(5) {
-            if historyMessage.isFromUser {
-                conversation += "[INST] \(historyMessage.content) [/INST] "
-            } else {
-                conversation += "\(historyMessage.content) "
-            }
+        // Add conversation history (last 3 messages for context)
+        for historyMessage in conversationHistory.suffix(3) {
+            conversation = "\(historyMessage.content) " + conversation
         }
-        
-        // Add current message
-        conversation += "[INST] \(message) [/INST]"
         
         let requestBody: [String: Any] = [
             "inputs": conversation,
@@ -69,6 +62,7 @@ class HuggingFaceProvider: AIProvider {
         request.httpBody = try JSONSerialization.data(withJSONObject: requestBody)
         
         print("🤖 Sending request to Hugging Face: \(model)")
+        print("🔑 Using API key: \(String(apiKey.prefix(10)))...")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
@@ -77,6 +71,16 @@ class HuggingFaceProvider: AIProvider {
         }
         
         print("📡 Hugging Face response status: \(httpResponse.statusCode)")
+        
+        if httpResponse.statusCode == 401 {
+            throw AIError.generationFailed("Invalid API key. Please check your Hugging Face token.")
+        }
+        
+        if httpResponse.statusCode == 404 {
+            let errorData = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("🚨 404 Error details: \(errorData)")
+            throw AIError.generationFailed("Model not found. Switching to Mock AI...")
+        }
         
         if httpResponse.statusCode == 429 {
             throw AIError.rateLimitExceeded
@@ -88,7 +92,8 @@ class HuggingFaceProvider: AIProvider {
         
         guard httpResponse.statusCode == 200 else {
             let errorData = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw AIError.generationFailed("HTTP \(httpResponse.statusCode): \(errorData)")
+            print("🚨 Error response: \(errorData)")
+            throw AIError.generationFailed("HTTP \(httpResponse.statusCode): API Error")
         }
         
         // Parse response
@@ -97,9 +102,6 @@ class HuggingFaceProvider: AIProvider {
            let generatedText = firstResult["generated_text"] as? String {
             
             let cleanedResponse = generatedText
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-                .replacingOccurrences(of: "[INST]", with: "")
-                .replacingOccurrences(of: "[/INST]", with: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             
             return cleanedResponse.isEmpty ? "I'm here to help!" : cleanedResponse
