@@ -52,18 +52,21 @@ struct NewChatView: View {
                     Button("Cancel") {
                         isPresented = false
                     }
+                    .foregroundColor(.white)
                 }
                 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     if isCreating {
                         ProgressView()
                             .scaleEffect(0.8)
+                            .tint(.white)
                     } else {
                         Button("Create") {
                             createConversation()
                         }
                         .disabled(conversationTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .fontWeight(.semibold)
+                        .foregroundColor(.white)
                     }
                 }
             }
@@ -83,7 +86,7 @@ struct NewChatView: View {
         VStack(spacing: 12) {
             Image(systemName: "bubble.left.and.bubble.right.fill")
                 .font(.system(size: 48))
-                .foregroundColor(.blue)
+                .foregroundColor(.white)
             
             Text("Start a New Conversation")
                 .font(.title2)

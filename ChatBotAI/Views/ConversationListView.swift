@@ -42,9 +42,9 @@ struct ConversationListView: View {
                         } label: {
                             Image(systemName: "plus")
                                 .font(.title3)
-                                .foregroundColor(.white)
+                                .foregroundColor(.black)
                                 .frame(width: 56, height: 56)
-                                .background(Circle().fill(.blue))
+                                .background(Circle().fill(.white))
                                 .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
                         }
                         .padding(.trailing, 20)
@@ -221,6 +221,7 @@ struct ConversationListView: View {
         } label: {
             Image(systemName: "square.and.pencil")
                 .font(.title3)
+                .foregroundColor(.white)
         }
         .accessibilityLabel("New Chat")
     }

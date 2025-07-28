@@ -4,7 +4,7 @@ A modern iOS chat application built with SwiftUI that integrates multiple AI pro
 
 ## Features
 
-- **Multi-AI Provider Support**: Choose between Groq, Hugging Face, and Mock AI
+- **Multi-AI Provider Support**: Choose between Groq and Mock AI
 - **Real-time Chat Interface**: Smooth messaging experience with typing indicators
 - **Conversation Management**: Persistent chat history with Supabase backend
 - **Anonymous Authentication**: Quick start without account creation
@@ -18,7 +18,6 @@ A modern iOS chat application built with SwiftUI that integrates multiple AI pro
 - **Backend**: Supabase (Database, Authentication)
 - **AI Providers**: 
   - Groq (Llama models)
-  - Hugging Face (DialoGPT)
   - Mock AI (Development/Fallback)
 - **Architecture**: MVVM with Swift Concurrency
 - **State Management**: Combine framework
@@ -50,12 +49,6 @@ cp ChatBotAI/Config/APIKeys.template.swift ChatBotAI/Config/APIKeys.swift
 struct APIKeys {
     // Get from: https://console.groq.com/keys
     static let groqAPIKey = "gsk_your_groq_api_key_here"
-    
-    // Get from: https://huggingface.co/settings/tokens  
-    static let huggingFaceAPIKey = "hf_your_huggingface_token_here"
-    
-    // Get from: https://makersuite.google.com/app/apikey
-    static let googleGeminiAPIKey = "your_gemini_api_key_here"
 }
 ```
 
@@ -95,17 +88,22 @@ ChatBotAI/
 │   │   ├── APIKeys.template.swift  # Template for API keys
 │   │   └── APIKeys.swift           # Your actual keys (gitignored)
 │   ├── Models/
-│   │   └── ChatModels.swift        # Data models
+│   │   ├── ChatModels.swift        # Data models
+│   │   └── NotificationNames.swift # App notifications
 │   ├── Services/
 │   │   ├── AIService.swift         # AI provider management
 │   │   ├── SupabaseService.swift   # Database operations
+│   │   ├── MockSupabaseService.swift # Development service
 │   │   └── AI Providers/
-│   │       ├── GroqProvider.swift
-│   │       └── HuggingFaceProvider.swift
+│   │       └── GroqProvider.swift  # Groq API integration
 │   └── Views/
 │       ├── AIModelSelectorView.swift
+│       ├── ChatDetailView.swift
 │       ├── ChatInputView.swift
+│       ├── ConversationListView.swift
+│       ├── ConversationNavigationView.swift
 │       ├── ErrorBannerView.swift
+│       ├── NewChatView.swift
 │       └── TypingIndicatorView.swift
 ├── database/
 │   └── supabase_setup.sql          # Database schema
@@ -118,20 +116,28 @@ ChatBotAI/
 
 1. Launch the app
 2. The app will automatically sign in anonymously
-3. Start typing in the input field at the bottom
-4. Messages are automatically saved to your conversation history
+3. Create a new chat or select an existing conversation
+4. Start typing in the input field at the bottom
+5. Messages are automatically saved to your conversation history
+
+### Managing Conversations
+
+1. **View Conversations**: Browse your chat history in the main list
+2. **Create New Chat**: Tap the "+" button or "New Chat" 
+3. **Delete Conversations**: Swipe left on any conversation (except the last one)
+4. **Auto-Generated Titles**: Chat titles are automatically created from your first message
 
 ### Switching AI Models
 
-1. Tap the AI model selector in the top-right corner
+1. Tap the AI model selector in the top-right corner of any chat
 2. Choose from available providers:
-   - **Groq Llama**: Fast, high-quality responses
-   - **Hugging Face**: Open-source models
+   - **Groq Llama 3.1 8B**: Fast, high-quality responses
+   - **Groq Mixtral 8x7B**: Alternative Groq model
    - **Mock AI**: For development and testing
 
 ### Testing API Connections
 
-1. Tap "Test APIs" in the top-left corner
+1. Tap "Test APIs" in the navigation bar
 2. View the status of all configured providers
 3. The app will auto-switch to working providers if others fail
 
@@ -141,11 +147,7 @@ ChatBotAI/
 1. Visit [Groq Console](https://console.groq.com/keys)
 2. Create an account and generate an API key
 3. Free tier: 30 requests per minute
-
-### Hugging Face
-1. Visit [Hugging Face Settings](https://huggingface.co/settings/tokens)
-2. Create a read token
-3. Free tier with reasonable limits
+4. Fast inference with Llama models
 
 ### Supabase
 1. Create a project at [Supabase](https://supabase.com)
@@ -167,15 +169,22 @@ The app follows MVVM architecture with SwiftUI:
 
 - **AIService**: Manages AI provider selection and response generation
 - **SupabaseService**: Handles database operations and authentication
-- **ContentView**: Main chat interface with message list and input
-- **ChatInputView**: Text input with keyboard management
+- **ConversationNavigationView**: Main navigation controller
+- **ChatDetailView**: Individual chat interface with message list and input
+- **ConversationListView**: Chat history and conversation management
+
+### Navigation Architecture
+
+- **NavigationStack**: Modern iOS navigation with proper back button support
+- **Selection-based Navigation**: Efficient conversation switching
+- **Deep Linking**: Support for direct chat navigation
 
 ### Adding New AI Providers
 
-1. Create a new provider class conforming to `AIProviderProtocol`
-2. Add the provider to `AIModel` enum
-3. Update `AIService` to handle the new provider
-4. Add configuration to `AIConfig`
+1. Create a new provider class conforming to `AIProvider` protocol
+2. Add the provider to `AIModel` enum in `AIService.swift`
+3. Update provider setup in `setupProviders()` method
+4. Add configuration and validation to `AIConfig.swift`
 
 ## Security
 
@@ -183,6 +192,7 @@ The app follows MVVM architecture with SwiftUI:
 - Supabase handles secure authentication and data storage
 - All API communications use HTTPS
 - No sensitive data is hardcoded in the repository
+- Anonymous authentication persists across app launches
 
 ## Contributing
 
@@ -209,10 +219,20 @@ The app follows MVVM architecture with SwiftUI:
 
 **Database Errors**: Check Supabase configuration and ensure the schema is set up correctly
 
-**Keyboard Issues**: The app includes automatic keyboard dismissal on tap outside
+**Navigation Issues**: The app uses NavigationStack for proper back button behavior
+
+**Conversation Deletion**: You cannot delete the last conversation - create a new one first
 
 ### Error Messages
 
 - "Failed to initialize chat": Check Supabase configuration
 - "Model not found": Verify API keys and model availability
 - "Authentication failed": Ensure anonymous auth is enabled in Supabase
+- "Cannot delete last conversation": Create additional conversations before deleting
+
+### Performance Tips
+
+- **Groq API**: Fastest responses, use as primary provider
+- **Mock AI**: Always available fallback when APIs fail
+- **Conversation History**: Automatically managed and persisted
+- **Memory Usage**: Messages are efficiently loaded per conversation

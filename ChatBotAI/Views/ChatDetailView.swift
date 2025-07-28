@@ -44,7 +44,7 @@ struct ChatDetailView: View {
                     }
                 }
                 .font(.caption)
-                .foregroundColor(.blue)
+                .foregroundColor(.white)
             }
             
             ToolbarItem(placement: .navigationBarTrailing) {
