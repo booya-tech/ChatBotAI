@@ -11,7 +11,7 @@ import SwiftUI
 struct ChatBotAIApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ConversationNavigationView()
         }
     }
 }

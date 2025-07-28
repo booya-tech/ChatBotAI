@@ -136,6 +136,80 @@ class AIService: ObservableObject {
         }
     }
     
+    func generateConversationTitle(from firstMessage: String) async throws -> String {
+        isGenerating = true
+        error = nil
+        
+        defer { isGenerating = false }
+        
+        guard let provider = providers[selectedModel.provider] else {
+            throw AIError.providerNotAvailable
+        }
+        
+        guard provider.isAvailable else {
+            throw AIError.providerNotConfigured(selectedModel.displayName)
+        }
+        
+        do {
+            let titlePrompt = """
+            Based on this user message, generate a short, descriptive conversation title (2-4 words max):
+            
+            User message: "\(firstMessage)"
+            
+            Create a title that captures the main topic or intent. Examples:
+            - "Help me code Swift" → "Swift Programming"
+            - "I need recipe ideas" → "Recipe Ideas" 
+            - "Write a love poem" → "Poetry Writing"
+            - "Explain quantum physics" → "Physics Help"
+            
+            Return only the title, no quotes or extra text:
+            """
+            
+            let title = try await provider.generateResponse(for: titlePrompt, conversationHistory: [])
+            
+            // Clean and validate the title
+            let cleanTitle = title
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: "\"", with: "")
+                .replacingOccurrences(of: "'", with: "")
+            
+            // Ensure title is reasonable length
+            if cleanTitle.count > 50 {
+                return String(cleanTitle.prefix(47)) + "..."
+            }
+            
+            // Fallback to a generic title if AI returns something weird
+            if cleanTitle.isEmpty || cleanTitle.count < 3 {
+                return "Chat"
+            }
+            
+            return cleanTitle
+            
+        } catch {
+            self.error = AIError.generationFailed(error.localizedDescription)
+            // Fallback to extract topic from user message
+            return extractTopicFromMessage(firstMessage)
+        }
+    }
+    
+    private func extractTopicFromMessage(_ message: String) -> String {
+        // Simple keyword extraction as fallback
+        let words = message.lowercased().components(separatedBy: .whitespacesAndNewlines)
+        
+        // Look for common topic indicators
+        let topicWords = ["code", "coding", "swift", "python", "recipe", "cooking", "write", "writing", 
+                         "poem", "story", "learn", "help", "explain", "math", "physics", "science"]
+        
+        for word in words {
+            if topicWords.contains(word) {
+                return word.capitalized + " Help"
+            }
+        }
+        
+        // Ultimate fallback
+        return "Chat"
+    }
+    
     func switchModel(to model: AIModel) {
         let oldModel = selectedModel
         selectedModel = model

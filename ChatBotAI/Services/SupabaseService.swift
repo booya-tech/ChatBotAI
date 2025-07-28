@@ -48,7 +48,16 @@ class SupabaseService: ObservableObject {
     }
     
     func signInAnonymously() async throws {
-        print("🔐 Attempting anonymous sign in...")
+        print("🔐 Checking for existing session...")
+        
+        // Check if we already have a valid session
+        if let existingUser = currentUser {
+            print("✅ Using existing session! User ID: \(existingUser.id.uuidString)")
+            return
+        }
+        
+        // Only create new anonymous user if no session exists
+        print("🆕 Creating new anonymous session...")
         try await client.auth.signInAnonymously()
         
         if let user = currentUser {
@@ -214,6 +223,74 @@ class SupabaseService: ObservableObject {
             return response
         } catch {
             self.error = SupabaseError.databaseError(error.localizedDescription)
+            throw error
+        }
+    }
+    
+    // MARK: - Conversation Management
+    
+    func updateConversationTitle(conversationId: UUID, title: String) async throws {
+        do {
+            guard let user = currentUser else {
+                throw SupabaseError.notAuthenticated
+            }
+            
+            print("🏷️ Updating conversation title to: \(title)")
+            
+            let updateRequest = [
+                "title": title,
+                "updated_at": ISO8601DateFormatter().string(from: Date())
+            ]
+            
+            let _: ChatConversation = try await client
+                .from("conversations")
+                .update(updateRequest)
+                .eq("id", value: conversationId.uuidString)
+                .eq("user_id", value: user.id.uuidString)
+                .select()
+                .single()
+                .execute()
+                .value
+            
+            print("✅ Conversation title updated successfully")
+            
+        } catch {
+            print("❌ Failed to update conversation title: \(error)")
+            self.error = SupabaseError.databaseError("Failed to update title: \(error.localizedDescription)")
+            throw error
+        }
+    }
+    
+    func deleteConversation(conversationId: UUID) async throws {
+        do {
+            guard let user = currentUser else {
+                throw SupabaseError.notAuthenticated
+            }
+            
+            print("🗑️ Deleting conversation: \(conversationId)")
+            
+            // First, delete all messages in the conversation
+            try await client
+                .from("messages")
+                .delete()
+                .eq("conversation_id", value: conversationId.uuidString)
+                .execute()
+            
+            print("✅ Deleted messages for conversation")
+            
+            // Then delete the conversation itself
+            try await client
+                .from("conversations")
+                .delete()
+                .eq("id", value: conversationId.uuidString)
+                .eq("user_id", value: user.id.uuidString)
+                .execute()
+            
+            print("✅ Conversation deleted successfully")
+            
+        } catch {
+            print("❌ Failed to delete conversation: \(error)")
+            self.error = SupabaseError.databaseError("Failed to delete conversation: \(error.localizedDescription)")
             throw error
         }
     }

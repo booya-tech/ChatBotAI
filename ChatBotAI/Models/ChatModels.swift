@@ -10,7 +10,7 @@ import Foundation
 // MARK: - Database Models
 
 /// Represents a chat conversation/session
-struct ChatConversation: Identifiable, Codable {
+struct ChatConversation: Identifiable, Codable, Hashable {
     let id: UUID
     let userId: String
     let title: String
