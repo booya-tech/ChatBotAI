@@ -250,7 +250,7 @@ struct ContentView: View {
             } catch {
                 print("❌ Failed to generate AI response: \(error)")
                 
-                // Auto-switch to Mock AI if Hugging Face fails with 404
+                // Auto-switch to Mock AI if model fails
                 if error.localizedDescription.contains("Model not found") {
                     print("🔄 Auto-switching to Mock AI due to model unavailability")
                     aiService.switchModel(to: .mockAI)
@@ -301,14 +301,6 @@ struct ContentView: View {
         
         var results: [String] = []
         
-        // Test Hugging Face
-        let hfResult = await AIConfig.testHuggingFaceToken()
-        if hfResult.isValid {
-            results.append("✅ Hugging Face: Working")
-        } else {
-            results.append("❌ Hugging Face: \(hfResult.error ?? "Failed")")
-        }
-        
         // Test Groq
         let groqResult = await AIConfig.testGroqToken()
         if groqResult.isValid {
@@ -322,12 +314,9 @@ struct ContentView: View {
             showAPITestResult = true
             
             // Auto-switch to working AI if current one fails
-            if !hfResult.isValid && groqResult.isValid {
-                print("🔄 Auto-switching to Groq since Hugging Face failed")
-                aiService.switchModel(to: .groqLlama)
-            } else if !groqResult.isValid && hfResult.isValid {
-                print("🔄 Auto-switching to Hugging Face since Groq failed")
-                aiService.switchModel(to: .huggingFaceDialo)
+            if !groqResult.isValid {
+                print("🔄 Auto-switching to Mock AI since Groq failed")
+                aiService.switchModel(to: .mockAI)
             }
         }
     }

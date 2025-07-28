@@ -23,8 +23,6 @@ protocol AIProvider {
 // MARK: - AI Models Enum
 
 enum AIModel: String, CaseIterable, Identifiable {
-    case huggingFaceDialo = "microsoft/DialoGPT-small"
-    case geminiFlash = "gemini-1.5-flash"
     case groqLlama = "llama-3.1-8b-instant"
     case groqMixtral = "mixtral-8x7b-32768"
     case mockAI = "mock-ai"
@@ -33,8 +31,6 @@ enum AIModel: String, CaseIterable, Identifiable {
     
     var displayName: String {
         switch self {
-        case .huggingFaceDialo: return "DialoGPT Small (Hugging Face)"
-        case .geminiFlash: return "Gemini 1.5 Flash (Google)"
         case .groqLlama: return "Llama 3.1 8B (Groq)"
         case .groqMixtral: return "Mixtral 8x7B (Groq)"
         case .mockAI: return "Mock AI (Hardcoded)"
@@ -43,8 +39,6 @@ enum AIModel: String, CaseIterable, Identifiable {
     
     var provider: AIProviderType {
         switch self {
-        case .huggingFaceDialo: return .huggingFace
-        case .geminiFlash: return .google
         case .groqLlama, .groqMixtral: return .groq
         case .mockAI: return .mock
         }
@@ -52,14 +46,14 @@ enum AIModel: String, CaseIterable, Identifiable {
     
     var isFree: Bool {
         switch self {
-        case .huggingFaceDialo, .geminiFlash, .groqLlama, .groqMixtral, .mockAI:
+        case .groqLlama, .groqMixtral, .mockAI:
             return true
         }
     }
 }
 
 enum AIProviderType {
-    case huggingFace, google, groq, mock
+    case groq, mock
 }
 
 // MARK: - AI Service
@@ -80,15 +74,13 @@ class AIService: ObservableObject {
     }
     
     private func setupProviders() {
-        providers[.huggingFace] = HuggingFaceProvider()
         providers[.groq] = GroqProvider()
-        providers[.google] = MockAIProvider() // Placeholder until GoogleGeminiProvider is added
         providers[.mock] = MockAIProvider()
     }
     
     private func selectBestAvailableModel() {
-        // Priority order: Groq (fastest/most reliable) > Hugging Face > Mock AI
-        let preferredModels: [AIModel] = [.groqLlama, .huggingFaceDialo, .mockAI]
+        // Priority order: Groq (fastest/most reliable) > Mock AI
+        let preferredModels: [AIModel] = [.groqLlama, .mockAI]
         
         for model in preferredModels {
             if let provider = providers[model.provider], provider.isAvailable {
